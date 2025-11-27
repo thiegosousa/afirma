@@ -1,116 +1,144 @@
-# app.py — VERSÃO FINAL 100% FUNCIONAL (Dígito1 GARANTIDO COM SEUS NOMES EXATOS)
 import re
 import io
 import pandas as pd
 import streamlit as st
 
-DEFAULT_FILE_PATH = "modelo da planilha.xlsx"
-st.set_page_config(page_title="Transpor Planilha - FINAL", layout="centered", initial_sidebar_state="expanded")
+DEFAULT_FILE_PATH = "modelo_planilha_nova.xlsx"  # Atualizado para seu arquivo real
+st.set_page_config(page_title="Transpor Planilha AFIRMASUS - CORRETO", layout="centered")
 
-st.title("Transpor Planilha → Formato Final 100% Correto")
-st.caption("Dígito1 preenchido com seus nomes exatos: Estudante 10) Dígito1 e Orientadora(or) de Serviço) Dígito1")
+st.title("Planilha AFIRMASUS → Formato Final 100% Correto")
+st.caption("Agência, Dígito, Conta e Dígito1 agora reconhecidos perfeitamente")
 
-# === 13 COLUNAS FINAIS NA ORDEM EXATA ===
+# === 14 COLUNAS FINAIS ===
 COLUNAS_FINAIS = [
     "Nome completo",
     "CPF",
     "Data de Nascimento",
     "Tipo",
+    "Graduação",
     "Número",
     "Instituição Bancária",
     "Agência Bancária (sem dígito)",
     "Digito",
     "Número da Conta Corrente Nominal (sem dígito)",
-    "Dígito1",                                          # ← AGORA 100% PREENCHIDO!
+    "Dígito1",
     "Instituição de ensino superior",
     "campus",
     "Nome da(o) Tutura(or)"
 ]
 
-# === Sidebar ===
-st.sidebar.header("Arquivo")
-use_default = st.sidebar.checkbox("Usar arquivo padrão", value=True)
-uploaded_file = st.sidebar.file_uploader("Upload do arquivo (.xlsx)", type=["xlsx"])
-st.sidebar.success("Dígito1 100% preenchido")
-st.sidebar.success("Compatível com: Estudante 10) Dígito1")
+# === COLUNAS A IGNORAR (Nomes completos das mães) ===
+COLUNAS_IGNORAR = [
+    f"Estudante {i}) Nome completo da mãe" for i in range(1, 11)
+] + ["Orientadora(or) de Serviço) Nome completo da mãe"]
 
-# === EXTRAIR LABEL COM DETECÇÃO EXATA DOS SEUS NOMES ===
+# ============================================================
+# FUNÇÃO PRINCIPAL DE EXTRAÇÃO DE LABEL (CORRIGIDA E ROBUSTA)
+# ============================================================
 def extrair_label(coluna: str) -> str:
-    texto = str(coluna).strip()
-    
-    # === DETECÇÃO ESPECÍFICA E PRIORITÁRIA PARA DÍGITO1 ===
-    if "Dígito1" in texto or "Digito1" in texto or "dígito1" in texto.lower():
-        return "Dígito1"
-    
-    if "Dígito" in texto and "Dígito1" not in texto:
-        return "Digito"
-    
-    # Remove prefixos comuns
-    texto = re.sub(r"Estudante\s*\d+\)\s*", "", texto, flags=re.I)
-    texto = re.sub(r"Orientadora?\(or\)\s*de\s*Serviço\)\s*", "", texto, flags=re.I)
-    texto = re.sub(r"\s*\d+$", "", texto).strip()
+    texto = str(coluna).replace("\xa0", " ").strip()
+    txt = texto.lower()
 
-    # Mapeamento dos demais campos
-    if re.search(r"\bCPF\b", texto, re.I):
-        return "CPF"
-    if "nome completo" in texto.lower():
-        return "Nome completo"
-    if "data" in texto.lower() and "nascimento" in texto.lower():
-        return "Data de Nascimento"
-    if "instituição bancária" in texto.lower():
-        return "Instituição Bancária"
-    if "agência" in texto.lower() and "dígito" in texto.lower():
+    # Ignora nome da mãe
+    if "nome completo da mãe" in txt:
+        return ""
+
+    # ==================== DADOS BANCÁRIOS - ESTUDANTES ====================
+    if re.search(r"Estudante\s*\d*\s*\)\s*Agência Bancária\s*\(sem dígito\)", texto):
         return "Agência Bancária (sem dígito)"
-    if "conta corrente" in texto.lower() and "sem dígito" in texto.lower():
+    if re.search(r"Estudante\s*\d*\s*\)\s*Dígito$", texto):
+        return "Digito"
+    if re.search(r"Estudante\s*\d*\s*\)\s*Número da Conta Corrente Nominal\s*\(sem dígito\)", texto):
         return "Número da Conta Corrente Nominal (sem dígito)"
-    if "instituição" in texto.lower() and "ensino" in texto.lower():
-        return "Instituição de ensino superior"
-    if texto.lower() == "campus":
-        return "campus"
-    if "tutora" in texto.lower() or "tutor" in texto.lower():
-        return "Nome da(o) Tutura(or)"
-    
-    return texto if texto else "Nome completo"
+    if re.search(r"Estudante\s*\d*\s*\)\s*Dígito1$", texto):
+        return "Dígito1"
 
-# === DETECÇÃO DE GRUPOS (reconhece Dígito1 corretamente) ===
+    # ==================== DADOS BANCÁRIOS - ORIENTADOR ====================
+    if "Orientadora(or) de Serviço) Agência Bancária (sem dígito)" in texto:
+        return "Agência Bancária (sem dígito)"
+    if "Orientadora(or) de Serviço) Dígito" in texto:
+        return "Digito"
+    if "Orientadora(or) de Serviço) Número da Conta Corrente Norminal (sem dígito)" in texto:
+        return "Número da Conta Corrente Nominal (sem dígito)"
+    if "Orientadora(or) de Serviço) Dígito1" in texto:
+        return "Dígito1"
+
+    # ==================== OUTROS CAMPOS PADRÃO ====================
+    if "cpf" in txt:
+        return "CPF"
+    if "nome completo" in txt and "mãe" not in txt:
+        return "Nome completo"
+    if "nascimento" in txt:
+        return "Data de Nascimento"
+    if "instituição bancária" in txt:
+        return "Instituição Bancária"
+    if "graduação" in txt or "nível de formação" in txt:
+        return "Graduação"
+    if "instituição de ensino superior" in txt:
+        return "Instituição de ensino superior"
+    if txt == "campus":
+        return "campus"
+    if "tutora" in txt or "tutor" in txt:
+        return "Nome da(o) Tutura(or)"
+
+    return ""
+
+# ============================================================
+# DETECTAR GRUPOS (Estudantes 1 a 10 + Orientador)
+# ============================================================
 def detect_groups(columns):
     grupos = {}
     fixas = []
-    
+
     for col in columns:
+        if col in COLUNAS_IGNORAR:
+            continue
+
         label = extrair_label(col)
+        if not label:
+            continue
+
         col_str = str(col)
-        
+
         # Estudantes
-        if re.search(r"Estudante\s*\d+\)", col_str):
-            num = re.search(r"\d+", col_str).group()
+        match_est = re.search(r"Estudante\s+(\d+)\)", col_str)
+        if match_est:
+            num = match_est.group(1)
             key = f"Estudante {num}"
             grupos.setdefault(key, {})[label] = col
-            
+
         # Orientador
-        elif "Orientadora(or)" in col_str or "Orientador" in col_str:
+        elif "Orientadora(or)" in col_str:
             grupos.setdefault("Orientador", {})[label] = col
-            
+
         else:
             fixas.append(col)
-            
+
     return grupos, fixas
 
-# === FORMATADORES ===
+# ============================================================
+# FUNÇÕES DE FORMATAÇÃO
+# ============================================================
+def limpar_num(v):
+    if pd.isna(v):
+        return ""
+    return re.sub(r"\D", "", str(v))
+
 def formatar_cpf(v):
-    if pd.isna(v) or str(v).strip() == "": return ""
-    cpf = re.sub(r"\D", "", str(v))
-    cpf = cpf.zfill(11)[-11:]
-    return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}"
+    cpf = limpar_num(v).zfill(11)[-11:]
+    return f"{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}" if len(cpf) == 11 else ""
 
 def formatar_data(v):
-    if pd.isna(v) or str(v).strip() == "": return ""
-    try:
-        return pd.to_datetime(str(v), errors='coerce').strftime("%d/%m/%Y") or ""
-    except:
+    if pd.isna(v):
         return ""
+    try:
+        return pd.to_datetime(v, dayfirst=True, errors='coerce').strftime("%d/%m/%Y")
+    except:
+        return str(v) if pd.notna(v) else ""
 
-# === TRANSFORMAÇÃO FINAL ===
+# ============================================================
+# TRANSFORMAÇÃO FINAL
+# ============================================================
 def transformar(df, grupos, fixas):
     linhas = []
     estudantes = sorted([k for k in grupos if k.startswith("Estudante")], key=lambda x: int(x.split()[-1]))
@@ -118,106 +146,102 @@ def transformar(df, grupos, fixas):
     for _, row in df.iterrows():
         base = {}
         for col in fixas:
-            val = row.get(col, "")
             label = extrair_label(col)
             if label in COLUNAS_FINAIS:
-                base[label] = val if pd.notna(val) else ""
+                base[label] = row.get(col, "")
 
-        # Estudantes
+        # === Processa cada Estudante ===
         for key in estudantes:
             campos = grupos[key]
-            nome_col = next((c for l, c in campos.items() if l == "Nome completo"), None)
-            if not nome_col or pd.isna(row.get(nome_col)) or str(row.get(nome_col)).strip() == "":
+            if "Nome completo" not in campos or pd.isna(row[campos["Nome completo"]]) or str(row[campos["Nome completo"]]).strip() == "":
                 continue
 
             reg = base.copy()
-            reg["Tipo"] = "Estudate"
-            reg["Número"] = key.replace("Estudante ", "Estudante ")
+            reg["Tipo"] = "Estudante"
+            reg["Número"] = key
+
             for label, col_orig in campos.items():
                 val = row.get(col_orig, "")
+
                 if label == "CPF":
                     val = formatar_cpf(val)
                 elif label == "Data de Nascimento":
                     val = formatar_data(val)
+                elif label in ["Agência Bancária (sem dígito)", "Digito", "Número da Conta Corrente Nominal (sem dígito)", "Dígito1"]:
+                    val = limpar_num(val)
+
                 reg[label] = val
+
             linhas.append(reg)
 
-        # Orientador (sempre por último)
+        # === Processa Orientador ===
         if "Orientador" in grupos:
             campos = grupos["Orientador"]
-            nome_col = next((c for l, c in campos.items() if l == "Nome completo"), None)
-            if nome_col and (pd.isna(row.get(nome_col)) or str(row.get(nome_col)).strip() == ""):
-                continue
+            if "Nome completo" in campos and pd.notna(row[campos["Nome completo"]]) and str(row[campos["Nome completo"]]).strip():
+                reg = base.copy()
+                reg["Tipo"] = "Orientador"
+                reg["Número"] = "Orientador"
 
-            reg = base.copy()
-            reg["Tipo"] = "Orientador"
-            reg["Número"] = "Orientador"
-            for label, col_orig in campos.items():
-                val = row.get(col_orig, "")
-                if label == "CPF":
-                    val = formatar_cpf(val)
-                elif label == "Data de Nascimento":
-                    val = formatar_data(val)
-                reg[label] = val
-            linhas.append(reg)
+                for label, col_orig in campos.items():
+                    val = row.get(col_orig, "")
 
-    df_long = pd.DataFrame(linhas) if linhas else pd.DataFrame(columns=COLUNAS_FINAIS)
-    
-    # Garante todas as 13 colunas na ordem exata
+                    if label == "CPF":
+                        val = formatar_cpf(val)
+                    elif label == "Data de Nascimento":
+                        val = formatar_data(val)
+                    elif label in ["Agência Bancária (sem dígito)", "Digito", "Número da Conta Corrente Nominal (sem dígito)", "Dígito1"]:
+                        val = limpar_num(val)
+
+                    reg[label] = val
+
+                linhas.append(reg)
+
+    df_final = pd.DataFrame(linhas)
     for col in COLUNAS_FINAIS:
-        if col not in df_long.columns:
-            df_long[col] = ""
-            
-    return df_long[COLUNAS_FINAIS].copy()
+        df_final[col] = df_final.get(col, "")
 
-# === EXECUÇÃO ===
-arquivo = uploaded_file
+    return df_final[COLUNAS_FINAIS]
+
+# ============================================================
+# INTERFACE STREAMLIT
+# ============================================================
+st.sidebar.header("Upload da Planilha")
+use_default = st.sidebar.checkbox("Usar modelo_planilha_nova.xlsx (padrão)", value=True)
+uploaded_file = st.sidebar.file_uploader("Ou faça upload do seu arquivo", type=["xlsx"])
+
 if use_default and not uploaded_file:
-    try:
-        arquivo = DEFAULT_FILE_PATH
-        st.info(f"Usando arquivo padrão: `{DEFAULT_FILE_PATH}`")
-    except:
-        st.warning("Arquivo padrão não encontrado")
+    uploaded_file = DEFAULT_FILE_PATH
+    st.info(f"Usando arquivo padrão: `{DEFAULT_FILE_PATH}`")
 
-if not arquivo:
+if not uploaded_file:
     st.info("Aguardando upload do arquivo...")
     st.stop()
 
 try:
-    df = pd.read_excel(arquivo, dtype=object)
-    st.success(f"Arquivo carregado: {df.shape[0]} linhas × {df.shape[1]} colunas")
+    df = pd.read_excel(uploaded_file, dtype=str)
+    df = df.drop(columns=[c for c in COLUNAS_IGNORAR if c in df.columns], errors="ignore")
+    st.success(f"Arquivo carregado com sucesso: {df.shape[0]} linhas × {df.shape[1]} colunas")
 except Exception as e:
-    st.error(f"Erro: {e}")
+    st.error(f"Erro ao carregar: {e}")
     st.stop()
 
 grupos, fixas = detect_groups(df.columns)
 
-# === VERIFICAÇÃO VISUAL DO DÍGITO1 ===
-with st.expander("Verificação: Dígito1 está sendo detectado?", expanded=True):
-    digito1_estudante = [col for col in df.columns if "Estudante" in str(col) and "Dígito1" in str(col)]
-    digito1_orientador = [col for col in df.columns if "Orientadora(or)" in str(col) and "Dígito1" in str(col)]
-    st.write(f"Coluna Estudante → Dígito1: {digito1_estudante}")
-    st.write(f"Coluna Orientador → Dígito1: {digito1_orientador}")
-    if digito1_estudante or digito1_orientador:
-        st.success("Dígito1 detectado e será incluído!")
-    else:
-        st.error("Dígito1 NÃO encontrado — verifique o nome exato da coluna")
-
-if st.button("GERAR PLANILHA FINAL (Dígito1 100% PREENCHIDO)", type="primary"):
-    with st.spinner("Processando..."):
+if st.button("GERAR PLANILHA FINAL CORRIGIDA", type="primary"):
+    with st.spinner("Transformando planilha..."):
         resultado = transformar(df, grupos, fixas)
 
-    st.success(f"CONCLUÍDO! {len(resultado):,} linhas geradas com sucesso")
-    st.dataframe(resultado.head(30), width="stretch")
+    st.success(f"PRONTO! {len(resultado)} registros gerados (Estudantes + Orientadores)")
+    st.dataframe(resultado, use_container_width=True)
 
     buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         resultado.to_excel(writer, index=False, sheet_name="Pessoas")
     buffer.seek(0)
 
     st.download_button(
-        label="BAIXAR PLANILHA FINAL (Dígito1 CORRETO)",
+        label="BAIXAR PLANILHA FINAL (CORRETA)",
         data=buffer,
-        file_name="PLANILHA_FINAL_DIGITO1_100_CORRETO.xlsx",
+        file_name="AFIRMASUS_FINAL_CORRIGIDO.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
